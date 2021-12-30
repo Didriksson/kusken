@@ -1,32 +1,14 @@
-# travcrawl
+# Kusken
 
-FIXME: description
-
-## Installation
-
-Download from http://example.com/FIXME.
+Ett sätt för mig att få lite koll på Trav.
+Hur får man det...?
+Man skriver en crawler och presenterar datan med Clojure. Såklart.
 
 ## Usage
 
-FIXME: explanation
+lein run
 
-    $ java -jar travcrawl-0.1.0-standalone.jar [args]
-
-## Options
-
-FIXME: listing of options this app accepts.
-
-## Examples
-
-...
-
-### Bugs
-
-...
-
-### Any Other Sections
-### That You Think
-### Might be Useful
+Then go to localhost:3000
 
 ## License
 
