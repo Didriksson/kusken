@@ -5,7 +5,7 @@
             [compojure.route :as route]
             [compojure.core :refer [defroutes GET]]
             [hiccup.page :as page]
-            [travcrawl.travhandler :refer [preFetchedAvdelningar, calculateForAvdelningar]]
+            [travcrawl.travhandler :refer [fetchAvdelning, calculateForAvdelningar]]
             ))
 
 
@@ -56,7 +56,7 @@
                (page/include-css "https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css")
                (page/include-js "https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js")
                [:body
-                [:div {:class "container"} (avdelningsAccordian (calculateForAvdelningar (preFetchedAvdelningar)))]]]))
+                [:div {:class "container"} (avdelningsAccordian (calculateForAvdelningar (fetchAvdelning)))]]]))
 
 (defroutes app-routes
   (GET "/" [] (index))
