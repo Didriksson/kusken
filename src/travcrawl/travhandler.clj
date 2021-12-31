@@ -43,14 +43,14 @@
     (merge kuskMedId (hamtaStatikForKusk (:id kuskMedId)))))
 
 (defn parseEkipage [avdelning]
-  (->> (extract-from avdelning
-                     "tr" [:startnummer :hast :kusk :speladprocent]
-                     "td:nth-child(1)" text
-                     "td:nth-child(2)" jsoup
-                     "td:nth-child(3)" jsoup
-                     "td:nth-child(9)" text)
-       (map #(update-in % [:hast] parseEnHast))
-       (map #(update-in % [:kusk] parseEnKusk))))
+  (doall (->> (extract-from avdelning
+                            "tr" [:startnummer :hast :kusk :speladprocent]
+                            "td:nth-child(1)" text
+                            "td:nth-child(2)" jsoup
+                            "td:nth-child(3)" jsoup
+                            "td:nth-child(9)" text)
+              (map #(update-in % [:hast] parseEnHast))
+              (map #(update-in % [:kusk] parseEnKusk)))))
 
 (defn parseStartplats [avdelning]
   (update-in avdelning [:hastar] parseEkipage))
@@ -131,17 +131,17 @@
 
 
 (defn calculateForAvdelningar [avdelningar]
-  (->>
-   (map calculateForAvdelning avdelningar)
-   (map beraknaSnitten)
-   (map display-results))
-  )
+  (doall (->>
+                (map calculateForAvdelning avdelningar)
+                (map beraknaSnitten)
+                (map display-results))))
+  
 
 (defn fetchAvdelning []
-  (->>
-   (parse startlistapage)
-   (parseAvdelning)
-   (map parseStartplats)))
+  (doall (->>
+                (parse startlistapage)
+                (parseAvdelning)
+                (pmap parseStartplats))))
 
 (defn preFetchedAvdelningar []
   (->>

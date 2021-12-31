@@ -11,7 +11,6 @@
 
 
 (defn avdelningsAccordian [avdelningar]
-  (println avdelningar)
   [:div#accordionAvdelningar {:class "accordion"}
    (for [avd avdelningar]
      [:div {:class "card"}
