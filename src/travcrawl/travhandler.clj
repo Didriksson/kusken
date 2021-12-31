@@ -167,5 +167,3 @@
    (map sort-by-supersnitt)
    (map display-results)
    (map narrow-down)))
-
-(fetchAndSave)
