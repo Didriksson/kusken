@@ -1,30 +1,29 @@
 (ns travcrawl.travhandler
   (:gen-class)  
   (:require [clj-http.client :as client]
-            [clojure.string :as str]))
+            [clojure.string :as str]
+            [clojure.core.memoize :as memo]))
 
 (require '[reaver :refer [parse extract extract-from attr text jsoup]])
 
+
 (def startlistapage (slurp "https://spelatrav.se/v75"))
 
-(defn hamtaStatistikInformationForHast [id]
+(defn hamtaStatistikInformation [url]
   (->>
-   (client/get (str "https://api.travsport.se/webapi/horses/statistics/organisation/TROT/sourceofdata/SPORT/horseid/" id) {:as :json})
+   (client/get url {:as :json})
    (:body)))
 
-(defn hamtaStatistikInformationForKusk [id]
-  (->>
-   (client/get (str "https://api.travsport.se/webapi/licenseholder/drivers/statistics/organisation/TROT/sourceofdata/SPORT/driverid/" id) {:as :json})
-   (:body)))
+(def cachadStatistikhamtning (memo/ttl hamtaStatistikInformation :ttl/threshold 43200000))
 
 
 (defn hamtaStatistikForHast [id]
-  (let [statistik (hamtaStatistikInformationForHast id)]
+  (let [statistik (cachadStatistikhamtning (str "https://api.travsport.se/webapi/horses/statistics/organisation/TROT/sourceofdata/SPORT/horseid/" id))]
     {:segerprocent (read-string (str/replace (:winningRate statistik) #"\s" ""))
      :startpoang (read-string (str/replace (:points statistik) #"\s" ""))}))
 
 (defn hamtaStatikForKusk [id]
-  (let [statistik (hamtaStatistikInformationForKusk id)]
+  (let [statistik (cachadStatistikhamtning (str "https://api.travsport.se/webapi/licenseholder/drivers/statistics/organisation/TROT/sourceofdata/SPORT/driverid/" id))]
     statistik))
 
 

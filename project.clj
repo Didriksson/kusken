@@ -10,7 +10,8 @@
                  [cheshire "5.10.1"]
                  [compojure "1.1.1"]
                  [ring/ring-jetty-adapter "1.1.2"]
-                 [hiccup                  "1.0.4"]]
+                 [hiccup                  "1.0.4"]
+                 [org.clojure/core.memoize "1.0.253"]]
   :main ^:skip-aot travcrawl.core
   :target-path "target/%s"
   :profiles {:uberjar {:aot :all}})
