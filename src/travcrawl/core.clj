@@ -12,11 +12,13 @@
 
 (defn avdelningsAccordian [avdelningar]
   [:div#accordionAvdelningar {:class "accordion"}
-   (for [avd avdelningar]
+   (for [avd avdelningar]     
      [:div {:class "card"}
       [:div {:class "card-header" :id (str "heading" (:avdelning avd))}
-       [:h5 {:class "mb-0"}
-        [:button {:class "btn btn-primary" :type "button" :data-bs-toggle "collapse" :data-bs-target (str "#collapse" (:avdelning avd)) :aria-expanded "true" :aria-controls (str "#collapse" (:avdelning avd))} (:avdelning avd)]]]
+       [:div {:class "d-flex justify-content-between"}
+        [:h5 {:class "mb-0"}
+         [:button {:class "btn btn-primary" :type "button" :data-bs-toggle "collapse" :data-bs-target (str "#collapse" (:avdelning avd)) :aria-expanded "true" :aria-controls (str "#collapse" (:avdelning avd))} (:avdelning avd)]]
+        [:p (:start avd)]]]
       [:div {:id (str "collapse" (:avdelning avd)) :class "collapse" :aria-labelledby (str "heading" (:avdelning avd)) :data-bs-parent "#accordionAvdelningar"}
        [:div {:class "card-body"}
         [:table {:class "table"}
@@ -30,8 +32,7 @@
            [:th {:scope "col"} "Segerprocent (kusk)"]
            [:th {:scope "col"} "Prispengar (kusk)"]
            [:th {:scope "col"} "Svenska folket (%)"]
-           [:th {:scope "col"} "Supersnittet"]
-           ]]
+           [:th {:scope "col"} "Supersnittets vinstchans (%)"]]]
          (for [hast (:predictions avd)]
            [:tbody
             [:th {:scope "row"} (:startnummer hast)]
@@ -42,8 +43,7 @@
             [:td (get-in hast [:data :segerprocentKusk])]
             [:td (get-in hast [:data :prispengarKusk])]
             [:td (get-in hast [:speladprocent])]
-            [:td (get-in hast [:supersnitt])]
-            ])]]]])])
+            [:td (get-in hast [:beraknadVinst])]])]]]])])
 
   (defn index []
   (page/html5 {:ng-app "myApp" :lang "en"}

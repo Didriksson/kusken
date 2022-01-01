@@ -1,5 +1,5 @@
 (ns travcrawl.travhandler
-  (:gen-class)  
+  (:gen-class)
   (:require [clj-http.client :as client]
             [clojure.string :as str]
             [clojure.core.memoize :as memo]))
@@ -8,6 +8,7 @@
 
 
 (def startlistapage (slurp "https://spelatrav.se/v75"))
+(def startmetodpage (slurp "https://www.travet.se/v75-startlista/"))
 
 (defn hamtaStatistikInformation [url]
   (->>
@@ -62,18 +63,16 @@
    "tbody > tr" jsoup))
 
 
-(defn snittHastar [hastar attSnitta]
-  (float (/ (reduce + (map #(get-in % attSnitta) hastar)) (count hastar))))
+(defn totaltBerakning [hastar attSnitta]
+  (float (reduce + (map #(get-in % attSnitta) hastar))))
 ;; => #'travcrawl.core/snittHastar
 
-
-
-(defn snittAvdelning [avdelning]
+(defn totaltAvdelning [avdelning]
   (let [hastar (:hastar avdelning)]
-    {:snittSegerprocentHast (snittHastar hastar [:berakning :segerprocentHast])
-     :snittStartpoang (snittHastar hastar [:berakning :startpoang])
-     :snittSegerprocentKusk (snittHastar hastar [:berakning :segerprocentKusk])
-     :snittPrispengarKusk (snittHastar hastar [:berakning :prispengarKusk])}))
+    {:snittSegerprocentHast (totaltBerakning hastar [:berakning :segerprocentHast])
+     :snittStartpoang (totaltBerakning hastar [:berakning :startpoang])
+     :snittSegerprocentKusk (totaltBerakning hastar [:berakning :segerprocentKusk])
+     :snittPrispengarKusk (totaltBerakning hastar [:berakning :prispengarKusk])}))
 
 (defn beraknaSnittForHast [snittForAvdelning hast]
   (let [snitt  {:jmfSegerprocentHast (/ (get-in hast [:berakning :segerprocentHast] hast) (:snittSegerprocentHast snittForAvdelning))
@@ -82,9 +81,7 @@
                 :jmfPrispengarKusk (/ (get-in hast [:berakning :prispengarKusk] hast) (:snittPrispengarKusk snittForAvdelning))}]
 
     (assoc snitt
-           :supersnitt (/ (reduce + (vals snitt)) (count (vals snitt))))))
-
-
+           :beraknadVinst (/ (reduce + (vals snitt)) (count (vals snitt))))))
 
 (defn getDataForEkipage [ekipage]
   {:segerprocentHast (get-in ekipage [:hast :segerprocent])
@@ -98,21 +95,22 @@
                                         :berakning (getDataForEkipage %)) (:hastar avdelning))))
 
 (defn beraknaSnitten [avdelning]
-  (let [snittForAvdelning (snittAvdelning avdelning)]
+  (let [snittForAvdelning (totaltAvdelning avdelning)]
     (assoc avdelning :hastar (map #(assoc % :berakning (beraknaSnittForHast snittForAvdelning %)) (:hastar avdelning)))))
 
 (defn sort-by-supersnitt [avdelning]
-  (assoc avdelning :hastar (reverse (sort-by #(get-in % [:berakning :supersnitt]) (:hastar avdelning)))))
+  (assoc avdelning :hastar (reverse (sort-by #(get-in % [:berakning :beraknadVinst]) (:hastar avdelning)))))
 
 (defn display-results [avdelning]
   {:avdelning (:avd avdelning)
+   :start (:startmetod avdelning)
    :predictions (map #(do
                         {:startnummer (:startnummer %)
                          :hast (get-in % [:hast :namn])
                          :kusk (get-in % [:kusk :namn])
                          :data (getDataForEkipage %)
                          :speladprocent (:speladprocent %)
-                         :supersnitt (format "%.3f" (get-in % [:berakning :supersnitt]))})
+                         :beraknadVinst (format "%.2f" (* 100 (get-in % [:berakning :beraknadVinst])))})
                      (:hastar avdelning))})
 
 
@@ -128,24 +126,41 @@
                     (map parseStartplats)
                     (prn-str))))
 
+(defn hamtaStartmetoder []
+  (->> (extract-from (parse startmetodpage) ".startlistor > form > h3"
+                     [:startmetod]
+                     "h3 > a" text)
+       (map :startmetod)
+       (map #(str/split % #", "))
+       (map #(do {:avd (first %) :start (last (str/split (last %) #" "))}))))
+
+
+(defn appendStartMetod [avd startmetoder]
+  (let [startmethodForAvd (first (filter #(= (:avd avd) (:avd %)) startmetoder))]
+    (assoc avd :startmetod (val (second startmethodForAvd)))))
+
+(defn appendStartmetoder [avdelningar]
+  (let [startmetoder (hamtaStartmetoder)]
+    (map #(appendStartMetod % startmetoder) avdelningar)))
 
 (defn calculateForAvdelningar [avdelningar]
   (doall (->>
-                (map calculateForAvdelning avdelningar)
-                (map beraknaSnitten)
-                (map display-results))))
-  
+          (map calculateForAvdelning avdelningar)
+          (map beraknaSnitten)
+          (map display-results))))
+
 
 (defn fetchAvdelning []
   (doall (->>
-                (parse startlistapage)
-                (parseAvdelning)
-                (pmap parseStartplats))))
+          (parse startlistapage)
+          (parseAvdelning)
+          (appendStartmetoder)
+          (pmap parseStartplats))))
 
 (defn preFetchedAvdelningar []
   (->>
    (read-string (slurp "data.txt"))))
-     
+
 
 (defn preFetchedCalculate []
   (->>
