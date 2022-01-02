@@ -7,6 +7,22 @@
 (require '[reaver :refer [parse extract extract-from attr text jsoup]])
 
 
+(def autostartspar {:1 1.10
+                    :2 1.10
+                    :3 1.10
+                    :4 1.12
+                    :5 1.13
+                    :6 1.10
+                    :7 1.08
+                    :8 1.04
+                    :9 1.06
+                    :10 1.07
+                    :11 1.05
+                    :12 1.03
+                    :13 1.00
+                    :14 1.00
+                    :15 1.00})
+
 (def startlistapage (slurp "https://spelatrav.se/v75"))
 (def startmetodpage (slurp "https://www.travet.se/v75-startlista/"))
 
@@ -29,9 +45,11 @@
 
 
 (defn parseEnHast [hast]
-  (let [haststatistik (extract hast [:namn :statistikurl]
+  (let [haststatistik (extract hast [:namn :statistikurl :spar]
                                "td" text
-                               "a" (attr :href))
+                               "a" (attr :href)
+                               "")
+                               
         hastMedId (merge haststatistik {:id (second (re-find #"visa\/(.+)\/resultat" (:statistikurl haststatistik)))})]
     (merge hastMedId (hamtaStatistikForHast (:id hastMedId)))))
 
@@ -42,25 +60,36 @@
         kuskMedId (merge kuskurl {:id (second (re-find #"visa\/(.+)\/kuskstat" (:statistikurl kuskurl)))})]
     (merge kuskMedId (hamtaStatikForKusk (:id kuskMedId)))))
 
+(defn parseSpar [spar]
+  (last (str/split spar #":")))
+
+(defn parseAvdelningsnamn [avd]
+  (second (re-find #"(V\d+-\d+)" avd)))
+  
 (defn parseEkipage [avdelning]
   (doall (->> (extract-from avdelning
-                            "tr" [:startnummer :hast :kusk :speladprocent]
+                            "tr" [:startnummer :hast :kusk :speladprocent :spar]
                             "td:nth-child(1)" text
                             "td:nth-child(2)" jsoup
                             "td:nth-child(3)" jsoup
-                            "td:nth-child(9)" text)
+                            "td:nth-child(9)" text
+                            "td:nth-child(4)" text)
               (map #(update-in % [:hast] parseEnHast))
-              (map #(update-in % [:kusk] parseEnKusk)))))
+              (map #(update-in % [:kusk] parseEnKusk))
+              (map #(update-in % [:spar] parseSpar)))))
+              
 
 (defn parseStartplats [avdelning]
   (update-in avdelning [:hastar] parseEkipage))
 
 (defn parseAvdelning [site]
-  (extract-from
-   site ".row > div"
-   [:avd :hastar]
-   "h4" text
-   "tbody > tr" jsoup))
+  (->> (extract-from
+        site ".row > div"
+        [:avd :hastar]
+        "h4" text
+        "tbody > tr" jsoup)
+       (map #(update-in % [:avd] parseAvdelningsnamn))
+       ))
 
 
 (defn totaltBerakning [hastar attSnitta]
@@ -74,14 +103,23 @@
      :snittSegerprocentKusk (totaltBerakning hastar [:berakning :segerprocentKusk])
      :snittPrispengarKusk (totaltBerakning hastar [:berakning :prispengarKusk])}))
 
-(defn beraknaSnittForHast [snittForAvdelning hast]
-  (let [snitt  {:jmfSegerprocentHast (/ (get-in hast [:berakning :segerprocentHast] hast) (:snittSegerprocentHast snittForAvdelning))
-                :jmfStartpoang (/ (get-in hast [:berakning :startpoang] hast) (:snittStartpoang snittForAvdelning))
-                :jmfSegerprocentKusk (/ (get-in hast [:berakning :segerprocentKusk] hast) (:snittSegerprocentKusk snittForAvdelning))
-                :jmfPrispengarKusk (/ (get-in hast [:berakning :prispengarKusk] hast) (:snittPrispengarKusk snittForAvdelning))}]
+(def snitt-konstanter
+  {:segerprocentHast 1.0
+   :startpoang 1.0
+   :segerprocentKusk 0.9
+   :prispengarKusk 0.9})
 
-    (assoc snitt
-           :beraknadVinst (/ (reduce + (vals snitt)) (count (vals snitt))))))
+(defn beraknaSnittForHast [snittForAvdelning hast start]
+  (let [snitt  {:jmfSegerprocentHast (* (:segerprocentHast snitt-konstanter) (/ (get-in hast [:berakning :segerprocentHast] hast) (:snittSegerprocentHast snittForAvdelning)))
+                :jmfStartpoang (* (:startpoang snitt-konstanter) (/ (get-in hast [:berakning :startpoang] hast) (:snittStartpoang snittForAvdelning)))
+                :jmfSegerprocentKusk (* (:segerprocentKusk snitt-konstanter) (/ (get-in hast [:berakning :segerprocentKusk] hast) (:snittSegerprocentKusk snittForAvdelning)))
+                :jmfPrispengarKusk (* (:prispengarKusk snitt-konstanter) (/ (get-in hast [:berakning :prispengarKusk] hast) (:snittPrispengarKusk snittForAvdelning)))}
+        beraknadVinst (/ (reduce + (vals snitt)) (count (vals snitt)))
+        sparjusterad (case start
+                       "Auto" (* beraknadVinst ((keyword (:spar hast)) autostartspar))
+                       "Volt" beraknadVinst
+                       beraknadVinst)]
+    (assoc snitt :beraknadVinst sparjusterad)))
 
 (defn getDataForEkipage [ekipage]
   {:segerprocentHast (get-in ekipage [:hast :segerprocent])
@@ -95,8 +133,9 @@
                                         :berakning (getDataForEkipage %)) (:hastar avdelning))))
 
 (defn beraknaSnitten [avdelning]
-  (let [snittForAvdelning (totaltAvdelning avdelning)]
-    (assoc avdelning :hastar (map #(assoc % :berakning (beraknaSnittForHast snittForAvdelning %)) (:hastar avdelning)))))
+  (let [snittForAvdelning (totaltAvdelning avdelning)
+        startmetod (:startmetod avdelning)]
+    (assoc avdelning :hastar (map #(assoc % :berakning (beraknaSnittForHast snittForAvdelning % startmetod)) (:hastar avdelning)))))
 
 (defn sort-by-supersnitt [avdelning]
   (assoc avdelning :hastar (reverse (sort-by #(get-in % [:berakning :beraknadVinst]) (:hastar avdelning)))))
@@ -136,8 +175,10 @@
 
 
 (defn appendStartMetod [avd startmetoder]
-  (let [startmethodForAvd (first (filter #(= (:avd avd) (:avd %)) startmetoder))]
-    (assoc avd :startmetod (val (second startmethodForAvd)))))
+  (let [startmethodForAvd (first (filter #(str/includes? (:avd avd) (:avd %)) startmetoder))]
+    (if (nil? startmethodForAvd)
+      (assoc avd :startmetod "N/A")
+      (assoc avd :startmetod (val (second startmethodForAvd))))))
 
 (defn appendStartmetoder [avdelningar]
   (let [startmetoder (hamtaStartmetoder)]
@@ -181,3 +222,9 @@
    (map sort-by-supersnitt)
    (map display-results)
    (map narrow-down)))
+
+
+(comment 
+  (preFetchedCalculate)
+  
+  )
